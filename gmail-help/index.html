@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gmail Cleanup</title>
+<style>
+  :root {
+    --bg: #09090b; --fg: #fafafa; --muted: #27272a; --muted-fg: #a1a1aa;
+    --accent: #18181b; --destructive: #ef4444; --border: #27272a; --blue: #8ab4f8; --radius: 0.5rem;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--fg); min-height: 100vh;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
+  .page-header { margin-bottom: 24px; }
+  .page-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; }
+  .page-header p { color: var(--muted-fg); font-size: 14px; margin-top: 2px; }
+
+  .badge {
+    display: inline-flex; align-items: center; border-radius: 9999px;
+    padding: 1px 8px; font-size: 12px; font-weight: 600;
+  }
+  .badge-count { background: var(--fg); color: var(--bg); min-width: 28px; text-align: center; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    white-space: nowrap; border-radius: 6px; font-size: 13px; font-weight: 500;
+    transition: all .15s; cursor: pointer; border: none; padding: 7px 14px;
+  }
+  .btn:disabled { pointer-events: none; opacity: 0.5; }
+  .btn-default { background: var(--fg); color: var(--bg); }
+  .btn-default:hover { opacity: 0.9; }
+  .btn-destructive { background: var(--destructive); color: #fff; }
+  .btn-destructive:hover { background: #dc2626; }
+  .btn-outline { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--accent); }
+  .btn-ghost { background: transparent; color: var(--muted-fg); }
+  .btn-ghost:hover { background: var(--accent); color: var(--fg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--fg); cursor: pointer; flex-shrink: 0; }
+  .scan-options { display: inline-flex; padding: 4px; background: #121214; border: 1px solid var(--border); border-radius: 9px; margin: 2px 0 18px; }
+  .scan-option { position: relative; min-width: 124px; }
+  .scan-option input { position: absolute; opacity: 0; pointer-events: none; }
+  .scan-option label { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border-radius: 5px; color: var(--muted-fg); cursor: pointer; font-size: 13px; font-weight: 500; }
+  .scan-option label::before { content: ''; width: 7px; height: 7px; border: 1px solid #666; border-radius: 50%; }
+  .scan-option input:focus-visible + label { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .scan-option input:checked + label { background: #242428; color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .scan-option input:checked + label::before { background: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 3px rgba(138,180,248,.12); }
+  .scan-action { min-width: 176px; padding: 9px 16px; background: var(--blue); color: #071525; font-weight: 650; }
+  .scan-action:hover { background: #a5c7ff; opacity: 1; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .toolbar-spacer { flex: 1; }
+
+  .status-bar {
+    padding: 6px 16px; font-size: 12px; color: var(--muted-fg);
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .dot-ok { background: #22c55e; }
+  .dot-busy { background: #eab308; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+
+  .sender-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    border-bottom: 1px solid var(--border); transition: background .1s;
+  }
+  .sender-row:hover { background: var(--accent); }
+  .sender-info { flex: 1; min-width: 0; cursor: pointer; }
+  .sender-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sender-email { font-size: 12px; color: var(--muted-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .chevron { width: 16px; height: 16px; color: var(--muted-fg); transition: transform .15s; flex-shrink: 0; cursor: pointer; }
+  .chevron.open { transform: rotate(90deg); }
+
+  .email-list { background: #0c0c0f; }
+  .email-item {
+    display: flex; align-items: baseline; gap: 8px; padding: 6px 16px 6px 56px;
+    border-bottom: 1px solid #151518; font-size: 13px;
+  }
+  .email-item:last-child { border-bottom: 1px solid var(--border); }
+  .email-subject { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .email-snippet { color: var(--muted-fg); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; flex-shrink: 0; }
+  .email-date { color: var(--muted-fg); font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+
+  .loading-container { display: flex; flex-direction: column; align-items: center; padding: 80px 24px; gap: 16px; }
+  .spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--fg); border-radius: 50%; animation: spin .6s linear infinite; }
+  .spinner-sm { width: 16px; height: 16px; border-width: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state { text-align: center; padding: 100px 24px; }
+  .empty-state h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .empty-state p { color: var(--muted-fg); font-size: 14px; margin-bottom: 20px; }
+
+  .progress-track { height: 4px; background: var(--muted); border-radius: 2px; overflow: hidden; width: 280px; }
+  .progress-fill { height: 100%; background: var(--fg); border-radius: 2px; transition: width .3s; }
+
+  .dialog-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .dialog {
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; max-width: 440px; width: calc(100% - 32px);
+  }
+  .dialog h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .dialog p { color: var(--muted-fg); font-size: 14px; margin-bottom: 16px; }
+  .dialog-names {
+    background: var(--accent); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font-size: 12px; color: var(--muted-fg); max-height: 150px;
+    overflow-y: auto; margin-bottom: 16px; white-space: pre-line; line-height: 1.6;
+  }
+  .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .dialog-progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .dialog-progress-text { font-size: 12px; color: var(--muted-fg); }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="page-header">
+    <h1>📧 Gmail Cleanup</h1>
+    <p>Group and delete inbox emails by sender</p>
+  </div>
+  <div id="app"></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const app = $('app');
+let allEmails = [], groups = [], expanded = {}, selected = {}, readState = 'unread';
+
+function stateLabel() { return readState === 'read' ? 'read' : 'unread'; }
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+async function startScan() {
+  allEmails = []; groups = []; expanded = {}; selected = {};
+  app.innerHTML = `
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p style="font-size:14px" id="scan-msg">Connecting to Gmail API...</p>
+      <div class="progress-track"><div class="progress-fill" id="scan-fill" style="width:0%"></div></div>
+      <p style="color:var(--muted-fg);font-size:12px" id="scan-detail">Fetching message list</p>
+    </div>`;
+
+  try {
+    const r = await fetch('/api/scan', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ readState })
+    });
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', finalData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line);
+          if (obj.emails) { finalData = obj; continue; }
+          if (obj.error) { renderError(obj.error); return; }
+          if (obj.status === 'scanning') {
+            const msg = $('scan-msg'), detail = $('scan-detail'), fill = $('scan-fill');
+            if (obj.phase === 'listing') {
+              if (msg) msg.textContent = `Finding ${stateLabel()} emails...`;
+              if (detail) detail.textContent = `${obj.found.toLocaleString()} messages found${obj.total ? ' of ~' + obj.total.toLocaleString() : ''}`;
+              if (fill && obj.total) fill.style.width = Math.min(50, (obj.found / obj.total) * 50) + '%';
+            } else if (obj.phase === 'fetching') {
+              if (msg) msg.textContent = 'Loading email details...';
+              if (detail) detail.textContent = `${obj.found.toLocaleString()} of ${obj.total.toLocaleString()} emails loaded`;
+              if (fill) fill.style.width = (50 + (obj.found / Math.max(obj.total, 1)) * 50) + '%';
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (!finalData || finalData.error) { renderError(finalData?.error || 'Scan failed'); return; }
+    allEmails = finalData.emails || [];
+    if (!allEmails.length) { renderEmpty(); return; }
+    groupAndRender();
+  } catch(e) { renderError(e.message); }
+}
+
+function groupAndRender() {
+  const map = {};
+  allEmails.forEach(e => {
+    if (!map[e.sender]) map[e.sender] = { name: e.senderName, sender: e.sender, emails: [] };
+    map[e.sender].emails.push(e);
+  });
+  groups = Object.values(map).sort((a, b) => b.emails.length - a.emails.length);
+  renderList();
+}
+
+function renderInitial() {
+  app.innerHTML = `
+    <div class="empty-state">
+      <h2>Ready to scan</h2>
+      <p>First, choose the emails you want to review.</p>
+      <div class="scan-options" role="radiogroup" aria-label="Email state to scan">
+        <div class="scan-option"><input type="radio" name="read-state" id="unread" value="unread" ${readState === 'unread' ? 'checked' : ''}><label for="unread">Unread</label></div>
+        <div class="scan-option"><input type="radio" name="read-state" id="read" value="read" ${readState === 'read' ? 'checked' : ''}><label for="read">Read</label></div>
+      </div>
+      <br>
+      <button class="btn scan-action" onclick="startScan()">Scan selected emails</button>
+    </div>`;
+}
+
+function renderError(msg) {
+  app.innerHTML = `
+    <div class="empty-state">
+      <h2>Something went wrong</h2>
+      <p>${esc(msg)}</p>
+      <button class="btn btn-default" onclick="startScan()" style="margin-top:8px">Retry</button>
+    </div>`;
+}
+
+function renderEmpty() {
+  app.innerHTML = `
+    <div class="empty-state">
+      <h2>No ${stateLabel()} emails found</h2>
+      <p>Your inbox is clean! 🎉</p>
+    </div>`;
+}
+
+function renderList() {
+  const selCount = Object.values(selected).filter(Boolean).length;
+  const selEmails = groups.filter(g => selected[g.sender]).reduce((s, g) => s + g.emails.length, 0);
+  const allSel = groups.length > 0 && selCount === groups.length;
+
+  app.innerHTML = `
+    <div class="card">
+      <div class="toolbar">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sel-all" ${allSel ? 'checked' : ''}>
+          <span style="font-size:12px;color:var(--muted-fg)">${selCount ? selCount + ' selected' : 'Select all'}</span>
+        </label>
+        <div class="toolbar-spacer"></div>
+        ${selCount ? `<button class="btn btn-destructive btn-sm" id="del-sel">Delete ${selEmails.toLocaleString()} email${selEmails!==1?'s':''}</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="renderInitial()">Change selection</button>
+        <button class="btn btn-outline btn-sm" onclick="startScan()">↻ Re-scan</button>
+      </div>
+      <div class="status-bar" id="status-bar">
+        <div class="dot dot-ok"></div>
+        <span>${allEmails.length.toLocaleString()} ${stateLabel()} emails · ${groups.length} senders</span>
+      </div>
+      <div id="list">${groups.map((g,i) => senderHTML(g,i)).join('')}</div>
+    </div>`;
+
+  $('sel-all').onchange = e => { groups.forEach(g => selected[g.sender] = e.target.checked); renderList(); };
+
+  const delBtn = $('del-sel');
+  if (delBtn) delBtn.onclick = () => {
+    const checked = groups.filter(g => selected[g.sender]);
+    const total = checked.reduce((s,g) => s + g.emails.length, 0);
+    const names = checked.map(g => `${g.name}  ·  ${g.emails.length}`).join('\n');
+    showDeleteDialog(
+      `Delete ${total.toLocaleString()} emails from ${checked.length} sender${checked.length>1?'s':''}?`,
+      'Emails will be moved to Trash.',
+      names, checked
+    );
+  };
+  bindRows();
+}
+
+function senderHTML(g, i) {
+  const isExp = expanded[g.sender], isSel = selected[g.sender];
+  return `<div>
+    <div class="sender-row">
+      <input type="checkbox" id="cb-${i}" ${isSel?'checked':''}>
+      <div class="sender-info" id="tog-${i}">
+        <div class="sender-name">${esc(g.name)}</div>
+        <div class="sender-email">${esc(g.sender)}</div>
+      </div>
+      <span class="badge badge-count">${g.emails.length}</span>
+      <svg class="chevron ${isExp?'open':''}" id="chv-${i}" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"/>
+      </svg>
+      <button class="btn btn-ghost btn-sm" id="del-${i}" style="color:var(--destructive)">Delete</button>
+    </div>
+    ${isExp ? emailListHTML(g) : ''}
+  </div>`;
+}
+
+function emailListHTML(g) {
+  return `<div class="email-list">${g.emails.map(e => `
+    <div class="email-item">
+      <div class="email-subject">${esc(e.subject)}</div>
+      ${e.snippet ? `<div class="email-snippet">${esc(e.snippet)}</div>` : ''}
+      ${e.date ? `<div class="email-date">${esc(e.date)}</div>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+function bindRows() {
+  groups.forEach((g, i) => {
+    const cb = $('cb-'+i), tog = $('tog-'+i), chv = $('chv-'+i), del = $('del-'+i);
+    if (cb) cb.onchange = e => { e.stopPropagation(); selected[g.sender] = cb.checked; renderList(); };
+    const toggle = () => { expanded[g.sender] = !expanded[g.sender]; renderList(); };
+    if (tog) tog.onclick = toggle;
+    if (chv) chv.onclick = toggle;
+    if (del) del.onclick = e => {
+      e.stopPropagation();
+      showDeleteDialog(
+        `Delete ${g.emails.length} email${g.emails.length!==1?'s':''} from ${g.name}?`,
+        `Emails from ${g.sender} will be moved to Trash.`,
+        null, [g]
+      );
+    };
+  });
+}
+
+document.addEventListener('change', event => {
+  if (event.target.name === 'read-state') readState = event.target.value;
+});
+
+function showDeleteDialog(title, message, names, senderList) {
+  const ov = document.createElement('div');
+  ov.className = 'dialog-overlay';
+  ov.innerHTML = `<div class="dialog">
+    <h3 id="dlg-title">${esc(title)}</h3>
+    <p id="dlg-msg">${esc(message)}</p>
+    ${names ? `<div class="dialog-names">${esc(names)}</div>` : ''}
+    <div class="dialog-actions" id="dlg-actions">
+      <button class="btn btn-outline btn-sm" id="dlg-no">Cancel</button>
+      <button class="btn btn-destructive btn-sm" id="dlg-yes">Delete</button>
+    </div>
+    <div class="dialog-progress" id="dlg-progress" style="display:none">
+      <div class="spinner spinner-sm"></div>
+      <span class="dialog-progress-text" id="dlg-ptxt">Deleting...</span>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+
+  const dlgTitle = ov.querySelector('#dlg-title');
+  const dlgActions = ov.querySelector('#dlg-actions');
+  const dlgProgress = ov.querySelector('#dlg-progress');
+  const dlgPtxt = ov.querySelector('#dlg-ptxt');
+
+  ov.querySelector('#dlg-no').onclick = () => ov.remove();
+  ov.onclick = e => { if (e.target === ov && dlgActions.style.display !== 'none') ov.remove(); };
+
+  ov.querySelector('#dlg-yes').onclick = async () => {
+    dlgActions.style.display = 'none';
+    dlgProgress.style.display = 'flex';
+
+    for (let i = 0; i < senderList.length; i++) {
+      const g = senderList[i];
+      const label = senderList.length > 1
+        ? `Deleting ${i+1}/${senderList.length}: ${g.name} (${g.emails.length})...`
+        : `Deleting ${g.emails.length} emails from ${g.name}...`;
+      dlgPtxt.textContent = label;
+      dlgTitle.textContent = label;
+
+      const r = await fetch('/api/delete-sender', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ sender: g.sender })
+      });
+      const result = await r.json();
+
+      allEmails = allEmails.filter(e => e.sender !== g.sender);
+      delete selected[g.sender];
+      delete expanded[g.sender];
+    }
+
+    dlgPtxt.textContent = 'Done! ✓';
+    dlgTitle.textContent = `Deleted emails from ${senderList.length} sender${senderList.length>1?'s':''}`;
+
+    setTimeout(() => { ov.remove(); groupAndRender(); }, 800);
+  };
+}
+
+renderInitial();
+</script>
+</body>
+</html>

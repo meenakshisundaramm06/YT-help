@@ -1,0 +1,5 @@
+.venv/
+token.json
+credentials.json
+.gmail_config.json
+__pycache__/

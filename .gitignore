@@ -1,0 +1,19 @@
+# Secrets and credentials: never commit these
+.gmail_config.json
+client_secret*.json
+credentials.json
+token.json
+.env
+.env.*
+!.env.example
+
+# Local agent / editor state
+.claude/
+.DS_Store
+
+# Dependencies and build output (rebuild with `npm install && npm run build`)
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+extension/dist/
